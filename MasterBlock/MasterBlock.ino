@@ -1,40 +1,43 @@
 #include <SoftwareSerial.h>
 
-#define LORAT_TX 1
-#define LORAT_RX 1
-#define LORAR_TX 1
-#define LORAR_RX 1
-#define FREQ_1
-#define FREQ_2
-#define FREQ_3
-#define FREQ_B
-#define WHATCHDOG
+#define LORAT_PINTX 12 //connected to the lora RX (D6)
+#define LORAT_PINRX 14 //connected to the lora TX (D5)
+#define LORAR_PINTX 4 //connected to the lora RX (D2)
+#define LORAR_PINRX 5 //connected to the lora TX (D1)
+#define FREQ_1 863000000
+#define FREQ_2 864000000
+#define FREQ_3 865000000
+#define FREQ_B 866000000
+#define WATCHDOG 10000
 
-SoftwareSerial loraTxSerial(LORAT_RX, LORAT_TX);
-SoftwareSerial loraRxSerial(LORAR_RX, LORAR_TX);
+SoftwareSerial loraTxSerial(LORAT_PINRX, LORAT_PINTX);
+SoftwareSerial loraRxSerial(LORAR_PINRX, LORAR_PINTX);
 
 String str, data_str;
 int data1, data2, data3;
 
 void setup() {
   Serial.begin(57600);  // Serial communication to PC
-  setupLora(loraTxSerial);
-  setupLora(loraRxSerial);
+  setupLoraRx();
+  setupLoraTx();
 
   Serial.println("setup completed");
 }
 
 void loop() {
   // communication with the modules
-  setupLora(loraTxSerial) //default frequency is broadcast
-  setupLora(loraRxSerial)
+/*  
+  setupLora(loraTxSerial); //default frequency is broadcast
+  setupLora(loraRxSerial);
+*/  
 
   //send the syncronization message and check it is sent correctly
   Serial.println("sending sync message");
   loraTxSerial.print("radio tx ");
-  loraTxSerial.println("SYNC");
+  loraTxSerial.println(1);
   checkTransmission();
 
+/*  
   //RX switch to freq 1
   loraRxSerial.println("radio set freq FREQ_1");
   str = loraRxSerial.readStringUntil('\n');
@@ -42,33 +45,39 @@ void loop() {
   //receive data from block 1
   Serial.println("waiting for a message from block 1");
   data1=receiveData();
+*/  
+  delay(4000);
 
-  delay(-----)
 
   //RX switch to freq 2
-  loraRxSerial.println("radio set freq FREQ_2");
+  //loraRxSerial.listen();  
+  loraRxSerial.print("radio set freq ");
+  loraRxSerial.println(FREQ_2);
   str = loraRxSerial.readStringUntil('\n');
   
   //receive data from block 2
   Serial.println("waiting for a message from block 2");
   data2=receiveData();
+  Serial.println(data2);
   
   //compute instructions for the fan using data1 and data2
 
 
 
   //TX switch to freq 2
-  loraTxSerial.println("radio set freq FREQ_2");
+  loraTxSerial.print("radio set freq ");
+  loraTxSerial.println(FREQ_2);
   str = loraTxSerial.readStringUntil('\n');  
 
   //send the fan instructions and check it is sent correctly
   Serial.println("sending fan instructions");
   loraTxSerial.print("radio tx ");
-  loraTxSerial.println("------");
+  loraTxSerial.println("111");
   checkTransmission();
 
-  delay(-----)
 
+  delay(10000);
+/*
   //RX switch to freq 3
   loraRxSerial.println("radio set freq FREQ_3");
   str = loraRxSerial.readStringUntil('\n');
@@ -96,12 +105,14 @@ void loop() {
   setupLoraWAN(loraRxSerial)
   
   //comunication with the server
+*/  
 
 }
 
 
 void checkTransmission() {
   str = loraTxSerial.readStringUntil('\n');
+  Serial.println(str);
   delay(20);
   if ( str.indexOf("ok") == 0 ) //check if the parameters are correct, and we are in tx mode
   {
@@ -142,7 +153,7 @@ int receiveData(){
       Serial.println("data received");
       int index = str.indexOf(' ');
       data_str=str.substring(index+1); //keeps only the <data> part of the string
-      data= data_str.toInt(); //trnasforms the string into an int
+      data= data_str.toInt(); //transforms the string into an int
     }
     else
     {
@@ -157,74 +168,148 @@ int receiveData(){
 }
 
 
-void setupLora(SoftwareSerial &loraSerial) {
 
-  loraSerial.begin(9600);  // Serial communication to RN2483
-  loraSerial.setTimeout(1000);
+void setupLoraTx() {
+  Serial.println("\nInitiating LoRaTx");
+  loraTxSerial.begin(9600);  // Serial communication to RN2483
+  loraTxSerial.setTimeout(1000);
 
-  loraSerial.listen();
-  str = loraSerial.readStringUntil('\n');
-  Serial.println(str);
-  loraSerial.println("sys get ver");
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.listen();
+  
+  loraTxSerial.println("sys get ver");
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("mac pause"); //necessary before radio commands
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("mac pause"); //necessary before radio commands
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);  
 
-  loraSerial.println("radio set mod lora");
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set mod lora");
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
 
-  loraSerial.println("radio set freq FREQ_B");
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.print("radio set freq ");
+  loraTxSerial.println(FREQ_B); 
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
 
-  loraSerial.println("radio set pwr 3");  //max power 14 dBm, -3 is the min, 3 good for power saving
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set pwr 3");  //max power 14 dBm, -3 is the min, 3 good for power saving
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
 
-  loraSerial.println("radio set sf sf7"); //min range, fast data rate, minimum battery impact
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set sf sf7"); //min range, fast data rate, minimum battery impact
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("radio set afcbw 41.7"); //sets the value used by the automatic frequency correction bandwidth
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set afcbw 41.7"); //sets the value used by the automatic frequency correction bandwidth
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("radio set rxbw 125"); //Lower receiver BW equals better link budget / SNR (less noise), but htere can be problems of freq drifting
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set rxbw 125"); //Lower receiver BW equals better link budget / SNR (less noise), but htere can be problems of freq drifting
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
 
-  loraSerial.println("radio set prlen 8"); //sets the preamble lenght
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set prlen 8"); //sets the preamble lenght
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("radio set crc on"); //able to correct single-bit errors and detect many multiple-bit errors
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set crc on"); //able to correct single-bit errors and detect many multiple-bit errors
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("radio set iqi off");
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set iqi off");
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("radio set cr 4/5"); //every 4 useful bits are going to be encoded by 5, transmission bits
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set cr 4/5"); //every 4 useful bits are going to be encoded by 5, transmission bits
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("radio set wdt WATCHDOG"); //set the whatch dog timer,  disable for continuous reception
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.print("radio set wdt "); //set the whatch dog timer,  disable for continuous reception
+  loraTxSerial.println(WATCHDOG);
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("radio set sync 12"); //set the sync word used
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set sync 12"); //set the sync word used
+  str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
   //For a fixed SF, a narrower bandwidth will increase sensitivity as the bit rate is reduced
   //this means more time-on-air, so more battery consumption, but it's easier to receive
-  loraSerial.println("radio set bw 125");
-  str = loraSerial.readStringUntil('\n');
+  loraTxSerial.println("radio set bw 125");
+  str = loraTxSerial.readStringUntil('\n');
+  Serial.println(str);
+}
+
+void setupLoraRx() {
+  Serial.println("\nInitiating LoRaRx");
+  loraRxSerial.begin(9600);  // Serial communication to RN2483
+  loraRxSerial.setTimeout(1000);
+
+  loraRxSerial.listen();
+  
+  loraRxSerial.println("sys get ver");
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+  
+  loraRxSerial.println("mac pause"); //necessary before radio commands
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);  
+
+  loraRxSerial.println("radio set mod lora");
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+
+  loraRxSerial.print("radio set freq ");
+  loraRxSerial.println(FREQ_1);
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+
+  loraRxSerial.println("radio set pwr 3");  //max power 14 dBm, -3 is the min, 3 good for power saving
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+
+  loraRxSerial.println("radio set sf sf7"); //min range, fast data rate, minimum battery impact
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+  
+  loraRxSerial.println("radio set afcbw 41.7"); //sets the value used by the automatic frequency correction bandwidth
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+  
+  loraRxSerial.println("radio set rxbw 125"); //Lower receiver BW equals better link budget / SNR (less noise), but htere can be problems of freq drifting
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+
+  loraRxSerial.println("radio set prlen 8"); //sets the preamble lenght
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+  
+  loraRxSerial.println("radio set crc on"); //able to correct single-bit errors and detect many multiple-bit errors
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+  
+  loraRxSerial.println("radio set iqi off");
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+  
+  loraRxSerial.println("radio set cr 4/5"); //every 4 useful bits are going to be encoded by 5, transmission bits
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+  
+  loraRxSerial.print("radio set wdt "); //set the whatch dog timer,  disable for continuous reception
+  loraRxSerial.println(WATCHDOG);
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+  
+  loraRxSerial.println("radio set sync 12"); //set the sync word used
+  str = loraRxSerial.readStringUntil('\n');
+  Serial.println(str);
+  
+  //For a fixed SF, a narrower bandwidth will increase sensitivity as the bit rate is reduced
+  //this means more time-on-air, so more battery consumption, but it's easier to receive
+  loraRxSerial.println("radio set bw 125");
+  str = loraRxSerial.readStringUntil('\n');
   Serial.println(str);
 }
 

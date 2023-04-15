@@ -1,13 +1,13 @@
 #include <SoftwareSerial.h>
 
-#define LORA_TX 1
-#define LORA_RX 1
-#define FREQ_1
-#define FREQ_B
-#define WHATCHDOG
+#define LORA_PINTX 12 //connected to the lora RX (D6)
+#define LORA_PINRX 14 //connected to the lora TX (D5)
+#define FREQ_2 864000000
+#define FREQ_B 866000000
+#define WATCHDOG 10000
 #define SLEEP_TIME
 
-SoftwareSerial loraSerial(LORA_RX, LORA_TX);
+SoftwareSerial loraSerial(LORA_PINRX, LORA_PINTX);
 
 String str, data_str;
 int data, instr;
@@ -23,29 +23,32 @@ void loop() {
   Serial.println("waiting for sync message");
   receiveSYNC();
 
-  delay(-----)
+  delay(4000);
 
   //switch to freq 1
-  loraSerial.println("radio set freq FREQ_1");
-  str = loraRxSerial.readStringUntil('\n');
+  loraSerial.println("radio set freq FREQ_2");
+  str = loraSerial.readStringUntil('\n');
   
   //send data to the master and check it is sent correctly
   Serial.println("sending data to the master");
   loraSerial.print("radio tx ");
-  loraSerial.println("------");
+  loraSerial.println("999");
   checkTransmission();
 
   //receive instructions from master block
   Serial.println("waiting for instructions");
   data=receiveData();
-
+  Serial.println(data);
   //execute the instructions
 
+  delay(10000);
 
 
+/*
   //set the lora module in sleep mode untile the next iteration
   loraSerial.println("sys sleep SLEEP_TIME"); //max sleep time is 4'294'967'296 ms
   str = loraSerial.readStringUntil('\n');
+*/
 
 }
 
@@ -86,7 +89,7 @@ void receiveSYNC(){
     {
       str = loraSerial.readStringUntil('\n');
     }
-    if ( str.indexOf("radio_rx SYNC") == 0 )  //checking if the sync message is received 
+    if ( str.indexOf("radio_rx 1") == 0 )  //checking if the sync message is received 
     {
       Serial.println("sync message received");
     }
@@ -139,8 +142,7 @@ void setupLora() {
   loraSerial.setTimeout(1000);
 
   loraSerial.listen();
-  str = loraSerial.readStringUntil('\n');
-  Serial.println(str);
+  
   loraSerial.println("sys get ver");
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
@@ -153,11 +155,12 @@ void setupLora() {
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
 
-  loraSerial.println("radio set freq FREQ_B");
+  loraSerial.print("radio set freq ");
+  loraSerial.println(FREQ_B);
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
 
-  loraSerial.println("radio set pwr 14");  //max power 14 dBm
+  loraSerial.println("radio set pwr 3");  //max power 14 dBm,  -3 is the min, 3 good for power saving
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
 
@@ -189,7 +192,8 @@ void setupLora() {
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("radio set wdt WATCHDOG"); //set the whatch dog timer,  disable for continuous reception
+  loraSerial.print("radio set wdt "); //set the whatch dog timer,  disable for continuous reception
+  loraSerial.println(WATCHDOG);
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
   
