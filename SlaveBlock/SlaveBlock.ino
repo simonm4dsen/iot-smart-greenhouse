@@ -1,6 +1,6 @@
 #include <SoftwareSerial.h>
 
-#define LORA_PINTX 12 //connected to the lora RX (D6)
+#define LORA_PINTX 12 //connected to the lora RX (D6 in the ESP, change it if you use arduino) 
 #define LORA_PINRX 14 //connected to the lora TX (D5)
 #define FREQ_2 864000000
 #define FREQ_B 866000000
@@ -19,6 +19,14 @@ void setup() {
 }
 
 void loop() {
+/*
+the idea for the loop, coherently with the scheme, was that when it starts the block wants to receive the sync message. modify the Whatchdog to make it wait longer
+after that, it waits for the necessary time (still to be defined after you put the rest of the code and you understand what information the block needs to collect, 
+and when the master will communicate with it). even here if you want to avoid blocking the wole block while waiting you can use millis to save the current time,
+and do studd while you check that the current time is still less than the saved time+ the waiting time
+after all the communciation with the master is done, you can put the lora module to sleep for the time you want
+*/
+
   // waiting for the sync message
   Serial.println("waiting for sync message");
   receiveSYNC();
@@ -26,33 +34,43 @@ void loop() {
   delay(4000);
 
   //switch to freq 1
-  loraSerial.println("radio set freq FREQ_2");
+  loraSerial.println("radio set freq ");
+  loraSerial.println(FREQ_2);
   str = loraSerial.readStringUntil('\n');
   
   //send data to the master and check it is sent correctly
   Serial.println("sending data to the master");
   loraSerial.print("radio tx ");
-  loraSerial.println("999");
+  loraSerial.println("999"); //put here the data you want to send
   checkTransmission();
 
   //receive instructions from master block
   Serial.println("waiting for instructions");
   data=receiveData();
   Serial.println(data);
+  
   //execute the instructions
+
+
 
   delay(10000);
 
 
-/*
   //set the lora module in sleep mode untile the next iteration
-  loraSerial.println("sys sleep SLEEP_TIME"); //max sleep time is 4'294'967'296 ms
+  loraSerial.print("sys sleep "); //max sleep time is 4'294'967'296 ms
+  loraSerial.println(SLEEP_TIME);
   str = loraSerial.readStringUntil('\n');
-*/
+
 
 }
 
-
+/*
+After sending something using the command "radio tx <data>", the module prints two messages.
+the first one is "ok" if the parameters are correct and the module is in tx mode, or something like "invalid param" if there is a problem. 
+check the RN2483 user manual on dtu Learn, week 5 if you need the exact message
+the second one is "radio_tx_ok" if the transmission was successfull
+this function prints in the serial monitor "message sent correctly" if there are no errors, or "transmission failed"
+*/
 void checkTransmission() {
   str = loraSerial.readStringUntil('\n');
   delay(20);
@@ -78,32 +96,15 @@ void checkTransmission() {
   }
 }
 
-void receiveSYNC(){
-  loraSerial.println("radio rx 0"); //wait for to receive until the watchdogtime
-  str = loraSerial.readStringUntil('\n');
-  delay(20);
-  if ( str.indexOf("ok") == 0 ) //check if the parameters are correct, and we are in rx mode
-  {
-    str = String("");
-    while(str=="")
-    {
-      str = loraSerial.readStringUntil('\n');
-    }
-    if ( str.indexOf("radio_rx 1") == 0 )  //checking if the sync message is received 
-    {
-      Serial.println("sync message received");
-    }
-    else
-    {
-      Serial.println("Received nothing");
-    }
-  }
-  else
-  {
-    Serial.println("radio not going into receive mode");
-  }
-}
 
+/*
+After we use the command "radio rx 0", the module goes in continous reception mode until it receives something or untile the whatchdog timer expires
+After the command, the module prints two messages.
+the first one is "ok" if the parameters are correct and the module is in rx mode, or something like "invalid param" if there is a problem. 
+check the RN2483 user manual on dtu Learn, week 5 if you need the exact message
+the second one is "radio_tx <data>" if the transmission was successfull
+this function takes the data received, it prints it in the serial monitor and it saves it as an int in the variable "data"
+*/
 int receiveData(){
   int data=0;
   loraSerial.println("radio rx 0"); //wait for to receive until the watchdogtime
@@ -135,6 +136,33 @@ int receiveData(){
   return data;
 }
 
+//very similar to receiveData, but it does not save the data
+//change the 1 after radio_rx if you change the sync message
+void receiveSYNC(){
+  loraSerial.println("radio rx 0"); //wait for to receive until the watchdogtime
+  str = loraSerial.readStringUntil('\n');
+  delay(20);
+  if ( str.indexOf("ok") == 0 ) //check if the parameters are correct, and we are in rx mode
+  {
+    str = String("");
+    while(str=="")
+    {
+      str = loraSerial.readStringUntil('\n');
+    }
+    if ( str.indexOf("radio_rx 1") == 0 )  //checking if the sync message is received 
+    {
+      Serial.println("sync message received");
+    }
+    else
+    {
+      Serial.println("Received nothing");
+    }
+  }
+  else
+  {
+    Serial.println("radio not going into receive mode");
+  }
+}
 
 void setupLora() {
 
