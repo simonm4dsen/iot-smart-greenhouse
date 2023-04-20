@@ -1,0 +1,21 @@
+pseadu code of the package-load between master and Azure IoT Hub
+prefferably implemented in a JSON format
+
+Data:
+
+"soil_moisture": decimal (0-100%),
+"light_level": int (0-1000),
+"temperature": int (0-50),
+"humidity": decimal (20-80%)
+
+Down-link / Actions:
+
+//Actions
+"activate_fan" (spin for x seconds)
+"activate_pump" (spin for x seconds)
+
+//Settings
+"light_setpoint" = Int (DEFAULT 450)
+"soilmoisture_setpoint" = Int (DEFAULT 95)
+"temperature_setpoint" = int (DEFAULT 25)
+
