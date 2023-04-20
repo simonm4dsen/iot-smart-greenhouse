@@ -1,14 +1,19 @@
 #include <SoftwareSerial.h>
 //these pins are thinked for the ESP, since the professor suggested that it would be the best option
 //also, when setting the timings, remember to check the duty cicle restrictions
+// Tansmitter (White)
 #define LORAT_PINTX 12 //connected to the lora RX (D6)
 #define LORAT_PINRX 14 //connected to the lora TX (D5)
+// Reciever (Dark)
 #define LORAR_PINTX 4 //connected to the lora RX (D2)
 #define LORAR_PINRX 5 //connected to the lora TX (D1)
+
 #define FREQ_1 863000000
 #define FREQ_2 864000000
 #define FREQ_3 865000000
-#define FREQ_B 866000000
+
+#define FREQ_B 866000000 // Broadcast frequency - All slaves recieves this, and then swaps to own frequency
+
 #define WATCHDOG 10000 //this watchdog set for how much time the lora module waits for a message
 
 SoftwareSerial loraTxSerial(LORAT_PINRX, LORAT_PINTX);
@@ -45,10 +50,11 @@ void loop() {
 
 
   //RX switch to freq 1
-  loraRxSerial.println("radio set freq FREQ_1");
+  loraRxSerial.print("radio set freq ");
+  loraRxSerial.println(FREQ_1);
   str = loraRxSerial.readStringUntil('\n');
   
-  //receive data from block 1
+  // --------------- receive data from block 1 - TEMP/HUMIDITY BLOCK (OBS: This was Block 2 in the original sketch)
   Serial.println("waiting for a message from block 1");
   data1=receiveData();
 
@@ -63,7 +69,7 @@ void loop() {
   loraRxSerial.println(FREQ_2);
   str = loraRxSerial.readStringUntil('\n');
   
-  //receive data from block 2
+  // --------------- receive data from block 2 - FAN BLOCK (OBS: This was block 1 in the original Sketch)
   Serial.println("waiting for a message from block 2");
   data2=receiveData();
   Serial.println(data2);
@@ -89,7 +95,7 @@ void loop() {
   loraRxSerial.println("radio set freq FREQ_3");
   str = loraRxSerial.readStringUntil('\n');
   
-  //receive data from block 3
+  // --------------- receive data from block 3
   Serial.println("waiting for a message from block 3");
   data3=receiveData();
 
@@ -106,13 +112,13 @@ void loop() {
   loraTxSerial.println("------");
   checkTransmission();
   
-  delay(-------)
+  //delay(-------)
   
   
   //comunication with the server
  
 
-}
+};
 
 /*
 After sending something using the command "radio tx <data>", the module prints two messages.

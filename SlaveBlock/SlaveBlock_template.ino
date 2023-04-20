@@ -1,83 +1,34 @@
-// inspo: 
-// Light Sensor setup https://projecthub.arduino.cc/DCamino/79c2ed93-e09e-47fd-93ff-fc9cf63d8a46
-// Fan setup https://learn.adafruit.com/adafruit-arduino-lesson-13-dc-motors?view=all
-
 #include <SoftwareSerial.h>
 
-#define LORA_PINTX 7 //connected to the lora RX 
-#define LORA_PINRX 8 //connected to the lora TX
+#define LORA_PINTX 12 //connected to the lora RX (D6 in the ESP, change it if you use arduino) 
+#define LORA_PINRX 14 //connected to the lora TX (D5)
 
-#define FREQ_2 864000000
+#define FREQ_1 863000000
 #define FREQ_B 866000000
 
 #define WATCHDOG 10000
-#define SLEEP_TIME 10000
+#define SLEEP_TIME
 
 SoftwareSerial loraSerial(LORA_PINRX, LORA_PINTX);
 
 String str, data_str;
 int data, instr;
 
-
-int light = 0; // store the current light value
-
-int lightPin = 13;
-int motorPin = 12;
-
 void setup() {
-    // put your setup code here, to run once:
-    Serial.begin(57600); //configure  serial to talk to computer // 9600
-    pinMode(lightPin, OUTPUT); // configure digital pin  13 as an output
-    //pinMode(12, OUTPUT); // configure digital pin 12 as an output
-
-    pinMode(motorPin, OUTPUT);
-    //while (! Serial);
-    Serial.println("Speed 0 to 255");
-
-    setupLora();
-    Serial.println("setup completed");
-
+  Serial.begin(57600);  // Serial communication to PC
+  setupLora();
+  Serial.println("setup completed");
 }
 
-void  loop() {
+void loop() {
+/*
+the idea for the loop, coherently with the scheme, was that when it starts the block wants to receive the sync message. modify the Whatchdog to make it wait longer
+after that, it waits for the necessary time (still to be defined after you put the rest of the code and you understand what information the block needs to collect, 
+and when the master will communicate with it). even here if you want to avoid blocking the wole block while waiting you can use millis to save the current time,
+and do studd while you check that the current time is still less than the saved time+ the waiting time
+after all the communciation with the master is done, you can put the lora module to sleep for the time you want
+*/
 
-    // put your main code here, to run repeatedly:
-    light = analogRead(A0);  // read and save value from PR
-    
-    //Serial.println(light); // print current  light value
- 
-    if(light > 450) { // If it is bright...
-        Serial.println("It  is quite light!");
-        digitalWrite(lightPin,LOW); //turn left LED off
-        //digitalWrite(12,LOW);  // turn right LED off
-    }
-    else if(light > 229 && light < 451) { // If  it is average light...
-        Serial.println("It is average light!");
-       digitalWrite(lightPin, HIGH); // turn left LED on
-       //digitalWrite(12,LOW);  // turn right LED off
-    }
-    else { // If it's dark...
-        Serial.println("It  is pretty dark!");
-        digitalWrite(lightPin,HIGH); // Turn left LED on
-        //digitalWrite(12,HIGH);  // Turn right LED on
-    }
-
-    // Replace serial monitor input w. Lora package instructions
-    if (Serial.available())
-    {
-      Serial.println("Recieved Serial Input");
-      int speed = Serial.parseInt();
-      Serial.println(speed, DEC);
-      if (speed >= 0 && speed <= 255)
-      {
-        analogWrite(motorPin, speed);
-        delay(1000); //Run for a couple of seconds - the serial "end token" will return 0 and turn off the motor
-      }
-    }
-
-    //delay(2000); // don't spam the computer!
-
-  // Lora communication  
   // waiting for the sync message
   Serial.println("waiting for sync message");
   receiveSYNC();
@@ -86,7 +37,7 @@ void  loop() {
 
   //switch to freq 1
   loraSerial.println("radio set freq ");
-  loraSerial.println(FREQ_2);
+  loraSerial.println(FREQ_1);
   str = loraSerial.readStringUntil('\n');
   
   //send data to the master and check it is sent correctly
@@ -100,7 +51,9 @@ void  loop() {
   data=receiveData();
   Serial.println(data);
   
-  //execute the instructions - manual Motor run, updated setting etc.
+  //execute the instructions
+
+
 
 
   delay(10000);
@@ -110,6 +63,8 @@ void  loop() {
   loraSerial.print("sys sleep "); //max sleep time is 4'294'967'296 ms
   loraSerial.println(SLEEP_TIME);
   str = loraSerial.readStringUntil('\n');
+
+
 }
 
 /*
@@ -283,3 +238,4 @@ void setupLora() {
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
 }
+
