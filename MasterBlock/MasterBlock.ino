@@ -1,5 +1,6 @@
 #include <SoftwareSerial.h>
-
+//these pins are thinked for the ESP, since the professor suggested that it would be the best option
+//also, when setting the timings, remember to check the duty cicle restrictions
 #define LORAT_PINTX 12 //connected to the lora RX (D6)
 #define LORAT_PINRX 14 //connected to the lora TX (D5)
 #define LORAR_PINTX 4 //connected to the lora RX (D2)
