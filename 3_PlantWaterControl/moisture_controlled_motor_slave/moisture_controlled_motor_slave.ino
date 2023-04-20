@@ -114,16 +114,16 @@ void loop()
 
 /** Function ==================================================================================|
   function name: setupLora
-  
 
+  Setup the LoRa component for data exchange with the master.
   
-  @param colorCode color code to convert.
-  @return the numerical value of the color code.
+  @param
+  @return
 */
 
 void setupLora() {
 
-  loraSerial.begin(9600);         // Serial communication to RN2483
+  loraSerial.begin(9600);           // Serial communication to RN2483
   loraSerial.setTimeout(1000);
 
   loraSerial.listen();
@@ -132,7 +132,7 @@ void setupLora() {
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraSerial.println("mac pause"); //necessary before radio commands
+  loraSerial.println("mac pause");  // Necessary before radio commands
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);  
 
@@ -195,33 +195,45 @@ void setupLora() {
 
 // ============================================================================================|
 
+/** Function ==================================================================================|
+  function name: receiveSync
+
+  Function similar to receiveData, used to sync the slave with the master.
+  
+
+  @param
+  @return
+*/
+
 //very similar to receiveData, but it does not save the data
 //change the 1 after radio_rx if you change the sync message
-void receiveSync(){
-  loraSerial.println("radio rx 0"); //wait for to receive until the watchdogtime
-  str = loraSerial.readStringUntil('\n');
-  delay(20);
-  if ( str.indexOf("ok") == 0 ) //check if the parameters are correct, and we are in rx mode
+
+void receiveSync()
   {
-    str = String("");
-    while(str=="")
-    {
-      str = loraSerial.readStringUntil('\n');
-    }
-    if ( str.indexOf("radio_rx 1") == 0 )  //checking if the sync message is received 
-    {
-      Serial.println("sync message received");
-    }
+    loraSerial.println("radio rx 0"); // Wait to receive until the watchdog time
+    str = loraSerial.readStringUntil('\n');
+    delay(20);
+    if ( str.indexOf("ok") == 0 ) //check if the parameters are correct, and we are in rx mode
+      {
+        str = String("");
+        while(str=="")
+          {
+            str = loraSerial.readStringUntil('\n');
+          }
+        if ( str.indexOf("radio_rx 1") == 0 )  //checking if the sync message is received 
+          {
+            Serial.println("sync message received");
+          }
+        else
+          {
+            Serial.println("Received nothing");
+          }
+      }
     else
     {
-      Serial.println("Received nothing");
+      Serial.println("radio not going into receive mode");
     }
   }
-  else
-  {
-    Serial.println("radio not going into receive mode");
-  }
-}
 
 // ============================================================================================|
 
