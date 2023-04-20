@@ -2,7 +2,9 @@
 
 #define LORA_PINTX 12 //connected to the lora RX (D6 in the ESP, change it if you use arduino) 
 #define LORA_PINRX 14 //connected to the lora TX (D5)
+#define FREQ_1 864000000  // Radio frequency for data transmission [Hz]
 #define FREQ_2 864000000
+#define FREQ_3 864000000
 #define FREQ_B 866000000
 #define WATCHDOG 10000
 #define SLEEP_TIME
@@ -34,7 +36,7 @@ after all the communciation with the master is done, you can put the lora module
   delay(4000);
 
   //switch to freq 1
-  loraSerial.println("radio set freq ");
+  loraSerial.print("radio set freq ");
   loraSerial.println(FREQ_2);
   str = loraSerial.readStringUntil('\n');
   
@@ -102,7 +104,7 @@ After we use the command "radio rx 0", the module goes in continous reception mo
 After the command, the module prints two messages.
 the first one is "ok" if the parameters are correct and the module is in rx mode, or something like "invalid param" if there is a problem. 
 check the RN2483 user manual on dtu Learn, week 5 if you need the exact message
-the second one is "radio_tx <data>" if the transmission was successfull
+the second one is "radio_rx <data>" if the reception was successfull
 this function takes the data received, it prints it in the serial monitor and it saves it as an int in the variable "data"
 */
 int receiveData(){
@@ -235,4 +237,3 @@ void setupLora() {
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
 }
-
