@@ -5,7 +5,7 @@ const int moisturePin = A0;
 float moistureRead;
 float moistureValue;
 const int maximumMoistureValue = 1023;
-const int moistureSetpoint = 50;
+const int moistureSetpoint = 40;
 
 void setup()
   {
