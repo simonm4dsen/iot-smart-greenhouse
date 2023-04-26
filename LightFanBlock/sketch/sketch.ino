@@ -4,8 +4,8 @@
 
 #include <SoftwareSerial.h>
 
-#define LORA_PINTX 7 //connected to the lora RX 
-#define LORA_PINRX 8 //connected to the lora TX
+#define LORA_PINTX 7 // TX; connected to the lora RX (D6 in the ESP, change it if you use arduino) 
+#define LORA_PINRX 8 // RX;
 
 #define FREQ_2 864000000
 #define FREQ_B 866000000
@@ -18,7 +18,6 @@ SoftwareSerial loraSerial(LORA_PINRX, LORA_PINTX);
 String str, data_str;
 int data, instr;
 
-
 int light = 0; // store the current light value
 
 int lightPin = 13;
@@ -26,13 +25,13 @@ int motorPin = 12;
 
 void setup() {
     // put your setup code here, to run once:
-    Serial.begin(57600); //configure  serial to talk to computer // 9600
+    Serial.begin(57600); //configure  serial to talk to computer // 9600 // 57600
     pinMode(lightPin, OUTPUT); // configure digital pin  13 as an output
     //pinMode(12, OUTPUT); // configure digital pin 12 as an output
 
     pinMode(motorPin, OUTPUT);
     //while (! Serial);
-    Serial.println("Speed 0 to 255");
+    //Serial.println("Speed 0 to 255");
 
     setupLora();
     Serial.println("setup completed");
@@ -78,13 +77,17 @@ void  loop() {
     //delay(2000); // don't spam the computer!
 
   // Lora communication  
+  //switch to freq 2
+  loraSerial.println("radio set freq ");
+  loraSerial.println(FREQ_B);
+  str = loraSerial.readStringUntil('\n');
   // waiting for the sync message
   Serial.println("waiting for sync message");
   receiveSYNC();
 
   delay(4000);
 
-  //switch to freq 1
+  //switch to freq 2
   loraSerial.println("radio set freq ");
   loraSerial.println(FREQ_2);
   str = loraSerial.readStringUntil('\n');
@@ -102,8 +105,7 @@ void  loop() {
   
   //execute the instructions - manual Motor run, updated setting etc.
 
-
-  delay(10000);
+  delay(1000);
 
 
   //set the lora module in sleep mode untile the next iteration
@@ -187,6 +189,7 @@ int receiveData(){
 //very similar to receiveData, but it does not save the data
 //change the 1 after radio_rx if you change the sync message
 void receiveSYNC(){
+  
   loraSerial.println("radio rx 0"); //wait for to receive until the watchdogtime
   str = loraSerial.readStringUntil('\n');
   delay(20);
@@ -197,7 +200,7 @@ void receiveSYNC(){
     {
       str = loraSerial.readStringUntil('\n');
     }
-    if ( str.indexOf("radio_rx 1") == 0 )  //checking if the sync message is received 
+    if ( str.indexOf("radio_rx 321") == 0 )  //checking if the sync message is received 
     {
       Serial.println("sync message received");
     }
@@ -213,9 +216,10 @@ void receiveSYNC(){
 }
 
 void setupLora() {
-
-  loraSerial.begin(9600);  // Serial communication to RN2483
-  loraSerial.setTimeout(1000);
+  Serial.println("\nInitiating LoRa Setup");
+  
+  loraSerial.begin(57600);  // Serial communication to RN2483 // 9600
+  loraSerial.setTimeout(5000);
 
   loraSerial.listen();
   
@@ -283,3 +287,5 @@ void setupLora() {
   str = loraSerial.readStringUntil('\n');
   Serial.println(str);
 }
+
+
