@@ -23,7 +23,7 @@ SoftwareSerial loraSerial(LORA_PINRX, LORA_PINTX);
 // Variables ===================================================================================|
 // Motor
 const int MOTOR_PIN = 2;
-int motorState = 0;
+int pumpState = 0;
 
 // Soil moisture sensor
 const int MOISTURE_SETPOINT = 99;
@@ -38,10 +38,10 @@ int data, instr;
 // Setup =======================================================================================|
 void setup() 
   {
-  pinMode(MOTOR_PIN, OUTPUT); 
-  Serial.begin(9600); // Serial communication to PC
-  setupLora();
-  Serial.println("Setup completed =========================================="); 
+    pinMode(MOTOR_PIN, OUTPUT); 
+    Serial.begin(9600); // Serial communication to PC
+    setupLora();
+    Serial.println("Setup completed =========================================="); 
   }
 
 
@@ -50,18 +50,21 @@ void loop()
 {
   // Block 3 - Plant water control
   moistureValue = analogRead(moisturePin)/moistureMaximum*100; 
-  if (moistureValue < MOISTURE_SETPOINT) {
-    digitalWrite(MOTOR_PIN, HIGH);
-    motorState = 1;
-  } else {
-    digitalWrite(MOTOR_PIN, LOW);
-    motorState = 0;
-  }
+  if (moistureValue < MOISTURE_SETPOINT)
+    {
+      digitalWrite(MOTOR_PIN, HIGH);
+      pumpState = 1;
+    }
+  else
+    {
+      digitalWrite(MOTOR_PIN, LOW);
+      pumpState = 0;
+    }
   Serial.print("Soil moisture: ");
   Serial.print(moistureValue);
   Serial.println("%");
-  Serial.print("Motor state: ");
-  Serial.println(motorState);
+  Serial.print("Pump state: ");
+  Serial.println(pumpState);
   delay(1000); 
 
   // LoRa loop - Reception and transmission
@@ -86,9 +89,11 @@ void loop()
   str = loraSerial.readStringUntil('\n');
   
   // 3. Send data to the master and check it is sent correctly
-  Serial.println("Sending data to the master.");
-  loraSerial.print("radio tx ");
-  loraSerial.println("999");  // *** PUT HERE THE DATA TO SEND TO THE MASTER ***
+  Serial.println("Sending moisture level to the master");
+  loraSerial.println("radio tx ");
+  loraSerial.print(moistureValue);  // *** PUT HERE THE DATA TO SEND TO THE MASTER ***
+  loraSerial.print("_");            //  *** PUT HERE THE DATA TO SEND TO THE MASTER ***
+  loraSerial.println(pumpState);    // *** PUT HERE THE DATA TO SEND TO THE MASTER ***
   checkTransmission();
 
   // 4. Receive instructions from master block
@@ -109,15 +114,9 @@ void loop()
 
 // ============================================================================================|
 // Functions used in the setup and loop
-/** Function ==================================================================================|
-  function name: setupLora
-
-  Setup the LoRa component for data exchange with the master.
-  
-  @param
-  @return
+/** Function: setupLora ==================================================================================|
+    Setup the LoRa component for data exchange with the master.
 */
-
 void setupLora() {
 
   loraSerial.begin(9600);           // Serial communication to RN2483
