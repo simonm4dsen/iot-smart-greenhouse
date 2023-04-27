@@ -8,6 +8,7 @@
 
 // Libraries =========================================================================================|
 #include <SoftwareSerial.h>       // To interface with the LoRa device
+//#include LibraryName.h
 
 // Variables =========================================================================================|
 // Pump
@@ -42,7 +43,7 @@ void setup()
   {
     pinMode(pumpPin, OUTPUT);    // Setup the digital pin to activate the motor
     Serial.begin(9600);           // Initiate the serial output on screen
-    setupLora();                  // Setup the LoRa device with the function defined below
+    setupLora(loraSerial);                  // Setup the LoRa device with the function defined below
     Serial.println("Setup complete ===============================================================|");
     Serial.print("pumpState : ");
     Serial.println(pumpState);
@@ -104,7 +105,7 @@ void loop()
       6. Set the LoRa module in sleep mode until the next iteration.
     */
 
-  /*  
+  
     // 1. Wait for the sync message
     Serial.println("COMMUNICATION WITH THE MASTER");
     Serial.println("Waiting for the sync message...");
@@ -132,7 +133,7 @@ void loop()
 
     // 5. Execute the instructions
     delay(1000);
-*/
+
     // 6. Set the lora module in sleep mode untile the next iteration
     loraSerial.print("sys sleep ");     // Puts the system to speed for the specified number of ms (SLEEP_TIME)
     loraSerial.println(SLEEP_TIME);
@@ -146,7 +147,7 @@ void loop()
   function name: setupLora
   Setup the LoRa component for data exchange with the master.
 */
-void setupLora()
+void setupLora(SoftwareSerial loraSerial)
   {
     loraSerial.begin(9600);                     // Serial communication to RN2483
     loraSerial.setTimeout(1000);                // Sets the maximum time (ms) to wait for serial data. Default = 1000 ms
@@ -228,7 +229,7 @@ void setupLora()
 //very similar to receiveData, but it does not save the data
 //change the 1 after radio_rx if you change the sync message
 
-void receiveSync()
+void receiveSync(SoftwareSerial loraSerial)
   {
     loraSerial.println("radio rx 0");                  // Set the receiver in Continuous Reception mode
     str = loraSerial.readStringUntil('\n');
@@ -244,18 +245,22 @@ void receiveSync()
           {
             Serial.println("└── Sync message received.");
           }
+        else if ( str.indexOf("radio_err") == 0 )      //  
+          {
+            Serial.println("└── Reception was not succesful, reception time has occurred.");
+          }
         else
           {
-            Serial.println("└── Sync message not received.");
+            Serial.println("└── Sync message not received, without any expected response. Is the transceiver well connected?");
           }
       }
     else if ( str.indexOf("invalid_param") == 0)
       {
         Serial.println("└── Parameter not valid");
       }
-    else if ( str.indexOf("radio_err") == 0)
+    else if ( str.indexOf("busy") == 0)
       {
-        Serial.println("└── Reception not succesful, reception time out occured");
+        Serial.println("└── Reception not succesful, the transceiver is currently busy.");
       }
     else
       {
@@ -273,7 +278,7 @@ void receiveSync()
        Check the RN2483 user manual on DTU Learn, week 5 for details on the exact message.
     2. "radio_tx_ok" if the transmission was successfull.
 */
-void checkTransmission()
+void checkTransmission(SoftwareSerial loraSerial)
   {
     str = loraSerial.readStringUntil('\n');
     delay(20);
@@ -294,7 +299,7 @@ void checkTransmission()
           }
         else
           {
-            Serial.println("└── Transmission failed unexpectedly.");
+            Serial.println("└── Transmission failed without any expected response.");
           }
       }
     else if (str.indexOf("invalid_param") == 0)
@@ -323,9 +328,9 @@ void checkTransmission()
   this function takes the data received, it prints it in the serial monitor and it saves it as an int in the variable "data"
 */
 
-int receiveData()
+int receiveData(SoftwareSerial loraSerial)
   {
-    int data=0;
+    int data_rx=0;
     loraSerial.println("radio rx 0");               // Set the receiver in Continuous Reception mode
     str = loraSerial.readStringUntil('\n');
     delay(20);
@@ -338,10 +343,10 @@ int receiveData()
           }
         if ( str.indexOf("radio_rx") == 0 )         // Check if reception was succesful, meaning radio_rx <data>
           {
-            Serial.println("data received");
+            Serial.println("└── Data received");
             int space_index = str.indexOf(' ');
-            data_str=str.substring(space_index+1); //keeps only the <data> part of the string
-            data= data_str.toInt(); //trnasforms the string into an int
+            data_str = str.substring(space_index + 1); //keeps only the <data> part of the string
+            data_rx = data_str.toInt(); //trnasforms the string into an int
           }
         else if ( str.indexOf("radio_err") == 0 ) 
           {
@@ -349,12 +354,21 @@ int receiveData()
           }
         else
           {
-            Serial.println("└── Reception not succesful; for unknown reasons.");
+            Serial.println("└── Reception not succesful without an expected response.");
           }
       }
-      else
+    else if ( str.indexOf ("invalid_param") == 0 )
+      {
+        Serial.println("└── Reception failed because parameter is not valid");
+      }
+    else if (str.indexOf ("busy") == 0)
+      {
+        Serial.println("└── Reception failed because the transceiver is busy.");
+      }
+    else
       {
         Serial.println("└── Reception failed without any expected response. Is the transceiver well connected?");
       }
-      return data;
+    return data;
   }
+

@@ -8,39 +8,18 @@
 #define SlaveToMaster_h
 
 #include "Arduino.h"
+#include <SoftwareSerial.h>
 
 class SlaveToMaster
 {
   public:
     SlaveToMaster();
-    void begin();
-    void dot();
-    void dash();
+    void setupLora(SoftwareSerial loraSerial);
+    void receiveSync(SoftwareSerial loraSerial);
+    void checkTransmission(SoftwareSerial loraSerial);
+    void receiveData(SoftwareSerial loraSerial);
+    SoftwareSerial _loraSerial;
   private:
-    int _pin;
-};
-
-#endif
-
-/*
-  Morse.h - Library for flashing Morse code.
-  Created by David A. Mellis, November 2, 2007.
-  Released into the public domain.
-*/
-#ifndef Morse_h
-#define Morse_h
-
-#include "Arduino.h"
-
-class Morse
-{
-  public:
-    Morse(int pin);
-    void begin();
-    void dot();
-    void dash();
-  private:
-    int _pin;
 };
 
 #endif
