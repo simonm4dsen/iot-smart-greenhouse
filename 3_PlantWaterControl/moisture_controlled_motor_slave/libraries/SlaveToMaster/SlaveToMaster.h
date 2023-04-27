@@ -19,7 +19,9 @@ class SlaveToMaster
     void checkTransmission(SoftwareSerial loraSerial);
     void receiveData(SoftwareSerial loraSerial);
     SoftwareSerial _loraSerial;
+    int freq;
   private:
+    SoftwareSerial _loraSerial;
 };
 
 #endif
