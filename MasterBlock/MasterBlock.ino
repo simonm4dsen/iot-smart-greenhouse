@@ -1,4 +1,35 @@
+// imports
+#include <ESP8266WiFi.h>
+#include "src/iotc/common/string_buffer.h"
+#include "src/iotc/iotc.h"
+#include <ArduinoJson.h> //Library for handling/unpacking JSON format
+
 #include <SoftwareSerial.h>
+
+// Define variables and pinouts
+
+//#define FAN_LED_PIN D1
+//#define PUMP_LED_PIN D2
+#define FAN_ON_TIME 10000 // 10 seconds
+#define PUMP_ON_TIME 15000 // 15 seconds
+
+// Block parameters
+const unsigned long TELEMETRY_INTERVAL = 5000;
+
+float temperatureThreshold = 30.0;
+float soilMoistureThreshold = 50.0;
+
+unsigned long fanOffTime = 0;
+unsigned long pumpOffTime = 0;
+
+// Azure IoT hub connection strings
+const char* SCOPE_ID = "0ne009E225E";
+const char* DEVICE_ID = "1hihltp023e";
+const char* DEVICE_KEY = "+9VWNWUEuL6C6XeNDI9jkw4+b8S8Fa/vpuSr54qvOp8=";
+
+#define WIFI_SSID "Simon - iPhone"
+#define WIFI_PASSWORD "IoT11223344"
+
 //these pins are thinked for the ESP, since the professor suggested that it would be the best option
 //also, when setting the timings, remember to check the duty cicle restrictions
 // Tansmitter (White)
@@ -13,6 +44,7 @@
 #define FREQ_3 865000000
 
 #define FREQ_B 866000000 // Broadcast frequency - All slaves recieves this, and then swaps to own frequency
+#define sync_msg 1
 
 #define WATCHDOG 10000 //this watchdog set for how much time the lora module waits for a message
 
@@ -25,17 +57,24 @@ because the system can listen to only one module at a time, and the listen also 
 String str, data_str;
 int data1, data2, data3;
 
+//When recieved command -> action
+void on_event(IOTContext ctx, IOTCallbackInfo* callbackInfo);
+#include "src/connection.h"
+
 void setup() {
+  Serial.println("setup Lora");
   Serial.begin(57600);  // Serial communication to PC
   setupLoraRx();
   setupLoraTx();
+
+  wifi_setup();
 
   Serial.println("setup completed");
 }
 
 void loop() {
   // communication with the modules
-/* this part was here because my idea was that every time the loop starts the matser talks with the other blocks, than it talks to the server untile th ened of the loop
+/* this part was here because my idea was that every time the loop starts the matser talks with the other blocks, than it talks to the server untile the end of the loop
   as a consequence when the loop starts again there is the need to set the modules to use Lora P2P again  
 
   setupLora(loraTxSerial); //default frequency is broadcast
@@ -43,33 +82,37 @@ void loop() {
 */  
 
   //send the syncronization message and check it is sent correctly
+  loraTxSerial.print("radio set freq ");
+  loraTxSerial.println(FREQ_B);
+  str = loraTxSerial.readStringUntil('\n');  
+
   Serial.println("sending sync message");
   loraTxSerial.print("radio tx ");
-  loraTxSerial.println(1); //this value was randomic, i used it to test the program, pick whatever you prefer. BTW i used the two prints so that you can also use a define if you prefer
+  loraTxSerial.println(sync_msg);
   checkTransmission();
+  delay(1000);
 
-
-  //RX switch to freq 1
-  loraRxSerial.print("radio set freq ");
-  loraRxSerial.println(FREQ_1);
-  str = loraRxSerial.readStringUntil('\n');
-  
   // --------------- receive data from block 1 - TEMP/HUMIDITY BLOCK (OBS: This was Block 2 in the original sketch)
-  Serial.println("waiting for a message from block 1");
-  data1=receiveData();
+  //RX switch to freq 1
+  //loraRxSerial.print("radio set freq ");
+  //loraRxSerial.println(FREQ_1);
+  //str = loraRxSerial.readStringUntil('\n');
+  
+  //Serial.println("waiting for a message from block 1");
+  //data1=receiveData();
 
-  delay(4000);  
+  //delay(4000);  
   //I put some random delays in order for the master to wait for the other blocks (in the moments when it should do it, as in the scheme I sent on teams). 
   //if the master needs to do anything esle in that period of time you can save the current time with millis, then check with a loop when you go past this time+the waiting time
 
 
+  // --------------- receive data from block 2 - FAN BLOCK (OBS: This was block 1 in the original Sketch)
   //RX switch to freq 2
-  //loraRxSerial.listen();  
+  Serial.println("RX to FREQ 2");
   loraRxSerial.print("radio set freq ");
   loraRxSerial.println(FREQ_2);
   str = loraRxSerial.readStringUntil('\n');
   
-  // --------------- receive data from block 2 - FAN BLOCK (OBS: This was block 1 in the original Sketch)
   Serial.println("waiting for a message from block 2");
   data2=receiveData();
   Serial.println(data2);
@@ -88,37 +131,177 @@ void loop() {
   loraTxSerial.println("111");
   checkTransmission();
 
-
   delay(10000);
 
+  // --------------- receive data from block 3
   //RX switch to freq 3
-  loraRxSerial.println("radio set freq FREQ_3");
-  str = loraRxSerial.readStringUntil('\n');
+  //loraRxSerial.print("radio set freq ");
+  //loraTxSerial.println(FREQ_3);
+  //str = loraRxSerial.readStringUntil('\n');
   
   // --------------- receive data from block 3
-  Serial.println("waiting for a message from block 3");
-  data3=receiveData();
+  //Serial.println("waiting for a message from block 3");
+  //data3=receiveData();
 
   //compute instructions for the pump using data1, data2 and data3
   //same thing as the fan instructions
 
   //TX switch to freq 3
-  loraTxSerial.println("radio set freq FREQ_3");
-  str = loraTxSerial.readStringUntil('\n');  
+  //loraTxSerial.print("radio set freq ");
+  //loraTxSerial.println(FREQ_3);
+  //str = loraTxSerial.readStringUntil('\n');  
 
   //send the pump instructions and check it is sent correctly
-  Serial.println("sending pump instructions");
-  loraTxSerial.print("radio tx ");
-  loraTxSerial.println("------");
-  checkTransmission();
+  //Serial.println("sending pump instructions");
+  //loraTxSerial.print("radio tx ");
+  //loraTxSerial.println("------");
+  //checkTransmission();
   
   //delay(-------)
   
   
-  //comunication with the server
+  //comunication with Cloud
+  // Generate random values
+  float humidity = random(2000, 8000) / 100.0;
+  float temperature = random(0, 50);
+  float SoilMoisture = random(0, 10000) / 100.0;
+  int LightLevel = random(0, 1000);
+
+  if (!isConnected) {
+    // Re-establish connection // UART Interrupt might be appropriate
+    client_reconnect();
+  }
+
+  if (isConnected) {
+    unsigned long ms = millis();
+    if (ms - lastTick > 10000) {  // send telemetry every 10 seconds
+      char msg[128] = {0};
+      int pos = 0, errorCode = 0;
+
+      lastTick = ms;
+
+      // Send telemetry data
+      pos = snprintf(msg, sizeof(msg) - 1, "{\"temperature\": %f, \"humidity\": %f, \"SoilMoisture\": %f, \"LightLevel\": %d}", temperature, humidity, SoilMoisture, LightLevel);
+      
+      errorCode = iotc_send_telemetry(context, msg, pos);
+
+      if (errorCode != 0) {
+        LOG_ERROR("Failed to send telemetry. errorCode=%d", errorCode);
+      } else {
+        LOG_VERBOSE("Telemetry sent");
+      }
+        // Debugging
+        Serial.print("Temperature threshold: ");
+        Serial.println(temperatureThreshold);
+        Serial.print("Soil moisture threshold: ");
+        Serial.println(soilMoistureThreshold);
+    }
+  }
+
+  iotc_do_work(context);
  
 
 };
+
+
+// ----- Helper functions -----
+
+void wifi_setup () {
+  Serial.println("setup wifi-connection");
+  connect_wifi(WIFI_SSID, WIFI_PASSWORD);
+  connect_client(SCOPE_ID, DEVICE_ID, DEVICE_KEY);
+
+  if (context != NULL) {
+    lastTick = 0;
+  }
+}
+
+void client_reconnect () {
+  Serial.println("setup client-connection");
+  connect_client(SCOPE_ID, DEVICE_ID, DEVICE_KEY);
+
+  if (context != NULL) {
+    lastTick = 0;
+  }
+}
+
+void on_event(IOTContext ctx, IOTCallbackInfo* callbackInfo) {
+  // ConnectionStatus
+  if (strcmp(callbackInfo->eventName, "ConnectionStatus") == 0) {
+    LOG_VERBOSE("Is connected ? %s (%d)",
+                callbackInfo->statusCode == IOTC_CONNECTION_OK ? "YES" : "NO",
+                callbackInfo->statusCode);
+    isConnected = callbackInfo->statusCode == IOTC_CONNECTION_OK;
+    return;
+  }
+
+  AzureIOT::StringBuffer buffer;
+  if (callbackInfo->payloadLength > 0) {
+    buffer.initialize(callbackInfo->payload, callbackInfo->payloadLength);
+  }
+
+  LOG_VERBOSE("- [%s] event was received. Payload => %s\n",
+              callbackInfo->eventName, buffer.getLength() ? *buffer : "EMPTY");
+
+  if (strcmp(callbackInfo->eventName, "Command") == 0) {
+    LOG_VERBOSE("- Command name was => %s\r\n", callbackInfo->tag);
+
+    if (strcmp(callbackInfo->tag, "ActivateFan") == 0) {
+
+      // ----- Activate Fan Downlink
+
+      //digitalWrite(FAN_LED_PIN, HIGH);
+      //delay(FAN_ON_TIME);
+      //digitalWrite(FAN_LED_PIN, LOW);
+
+    } else if (strcmp(callbackInfo->tag, "ActivatePump") == 0) {
+
+      // Activate Pump Downlink
+
+      //digitalWrite(PUMP_LED_PIN, HIGH);
+      //delay(PUMP_ON_TIME);
+      //digitalWrite(PUMP_LED_PIN, LOW);
+
+    } else if (strcmp(callbackInfo->tag, "TemperatureThreshold") == 0) {
+
+      // Update Temperature Threshold
+
+      float newThreshold = atof(*buffer);
+      if (newThreshold >= 0) {
+        temperatureThreshold = newThreshold;
+        LOG_VERBOSE("Temperature threshold updated to %f", temperatureThreshold);
+      }
+    } else if (strcmp(callbackInfo->tag, "SoilMoistureThreshold") == 0) {
+
+      // Update Moisture Threshold
+
+      float newThreshold = atof(*buffer);
+      if (newThreshold >= 0) {
+        soilMoistureThreshold = newThreshold;
+        LOG_VERBOSE("Soil moisture threshold updated to %f", soilMoistureThreshold);
+      }
+    }
+  } else if (strcmp(callbackInfo->eventName, "Properties") == 0) {
+    // Update device properties
+    AzureIOT::StringBuffer propertyBuffer;
+    propertyBuffer.initialize(callbackInfo->payload, callbackInfo->payloadLength);
+
+    DynamicJsonDocument jsonDoc(256);
+    DeserializationError error = deserializeJson(jsonDoc, *propertyBuffer);
+    if (!error) {
+      JsonObject jsonObj = jsonDoc.as<JsonObject>();
+      if (jsonObj.containsKey("TemperatureThreshold")) {
+        temperatureThreshold = jsonObj["TemperatureThreshold"];
+      }
+      if (jsonObj.containsKey("SoilMoistureThreshold")) {
+        soilMoistureThreshold = jsonObj["SoilMoistureThreshold"];
+      }
+    } else {
+      Serial.print("deserializeJson() failed: ");
+      Serial.println(error.c_str());
+    }
+  }
+}
 
 /*
 After sending something using the command "radio tx <data>", the module prints two messages.
@@ -129,7 +312,7 @@ this function prints in the serial monitor "message sent correctly" if there are
 */
 void checkTransmission() {
   str = loraTxSerial.readStringUntil('\n'); //read the first message
-  delay(20);
+  delay(30);
   if ( str.indexOf("ok") == 0 ) //check if the parameters are correct, and we are in tx mode
   {
     str = String("");
@@ -161,6 +344,7 @@ check the RN2483 user manual on dtu Learn, week 5 if you need the exact message
 the second one is "radio_tx <data>" if the transmission was successfull
 this function takes the data received, it prints it in the serial monitor and it saves it as an int in the variable "data"
 */
+
 int receiveData(){
   int data=0;
   loraRxSerial.println("radio rx 0"); //wait to receive until the watchdogtime (continous reception)
@@ -196,8 +380,8 @@ int receiveData(){
 
 void setupLoraTx() {
   Serial.println("\nInitiating LoRaTx");
-  loraTxSerial.begin(9600);  // Serial communication to RN2483
-  loraTxSerial.setTimeout(1000);
+  loraTxSerial.begin(57600);  // Serial communication to RN2483 // 9600
+  loraTxSerial.setTimeout(5000);
 
   loraTxSerial.listen();
   
@@ -255,7 +439,7 @@ void setupLoraTx() {
   str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraTxSerial.println("radio set sync 12"); //set the sync word used
+  loraTxSerial.println("radio set sync 321"); //set the sync word used
   str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
@@ -268,7 +452,7 @@ void setupLoraTx() {
 
 void setupLoraRx() {
   Serial.println("\nInitiating LoRaRx");
-  loraRxSerial.begin(9600);  // Serial communication to RN2483
+  loraRxSerial.begin(57600);  // Serial communication to RN2483
   loraRxSerial.setTimeout(1000);
 
   loraRxSerial.listen();
@@ -286,7 +470,7 @@ void setupLoraRx() {
   Serial.println(str);
 
   loraRxSerial.print("radio set freq ");
-  loraRxSerial.println(FREQ_1);
+  loraRxSerial.println(FREQ_B);
   str = loraRxSerial.readStringUntil('\n');
   Serial.println(str);
 
@@ -327,7 +511,7 @@ void setupLoraRx() {
   str = loraRxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraRxSerial.println("radio set sync 12"); //set the sync word used
+  loraRxSerial.println("radio set sync 1"); //set the sync word used
   str = loraRxSerial.readStringUntil('\n');
   Serial.println(str);
   
