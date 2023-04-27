@@ -11,10 +11,6 @@
 DHT dht(DHTPIN, DHTTYPE);
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
-// Define temperature and humidity thresholds
-float temperatureThreshold = 25.0;
-float humidityThreshold = 60.0;
-
 void setup() {
   Serial.begin(9600);
   while (!Serial) delay(10);
@@ -46,19 +42,14 @@ void loop() {
   Serial.print(temperature);
   Serial.println("°C");
   
-  // Check if temperature or humidity is above threshold
-  if (temperature >= temperatureThreshold || humidity >= humidityThreshold) {
-    Serial.println("Threshold exceeded!");
-    
-    uint8_t data[4];
-    data[0] = (uint8_t)humidity;
-    data[1] = (uint8_t)(humidity >> 8);
-    data[2] = (uint8_t)temperature;
-    data[3] = (uint8_t)(temperature >> 8);
-    
-    digitalWrite(LED, HIGH);
-    rf95.send(data, sizeof(data));
-    rf95.waitPacketSent();
-    digitalWrite(LED, LOW);
-  }
+  uint8_t data[4];
+  data[0] = (uint8_t)humidity;
+  data[1] = (uint8_t)(humidity >> 8);
+  data[2] = (uint8_t)temperature;
+  data[3] = (uint8_t)(temperature >> 8);
+  
+  digitalWrite(LED, HIGH);
+  rf95.send(data, sizeof(data));
+  rf95.waitPacketSent();
+  digitalWrite(LED, LOW);
 }
