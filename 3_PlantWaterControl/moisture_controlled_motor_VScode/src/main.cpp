@@ -1,6 +1,7 @@
+#include "Arduino.h"
+
 const int motorPin = 9;
 
-// Moisture sensor
 const int moisturePin = A0;
 float moistureRead;
 float moistureValue;

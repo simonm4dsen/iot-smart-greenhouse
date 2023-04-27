@@ -18,13 +18,13 @@ int activatePump = 0;             // Boolean to activate the pumo from the maste
 // Moisture sensor
 const int moisturePin = A0;               // Pin for the moisture sensor 
 const int maximumMoistureValue = 1023;    // Maximum value measurable by the moisture sensor
-const float moistureSetpoint = 600;          // Moisture setpoint to activate the pump
+const float moistureSetpoint = 800;          // Moisture setpoint to activate the pump
 float moistureRead;                       // Reading from the moisture sensor [0-maximumMoistureValue]
 float moistureValue;                      // Moisture value normalized from the moisture sensor [%]
 
 // LoRa device
-#define LORA_PINTX 12     // Connected to the lora RX (D6 in the ESP, change it if you use arduino) 
-#define LORA_PINRX 14     // Connected to the lora TX (D5)
+#define LORA_PINTX 3          // Connected to the lora RX (D6 in the ESP, change it if you use arduino) 
+#define LORA_PINRX 2          // Connected to the lora TX (D5), was 14 in Marco's sketch
 const int FREQ_1 = 863000000;  // Radio frequency for data transmission [Hz] for the 3 blocks
 const int FREQ_2 = 864000000;
 const int FREQ_3 = 865000000;
@@ -55,7 +55,7 @@ void loop()
     // Logic: read the moisture and the value from the server and activate the pump accordingly
     moistureRead = analogRead(moisturePin);
     moistureValue = moistureRead/maximumMoistureValue * 100;
-    if ((moistureRead < moistureSetpoint) || (activatePump == 1))
+    if (moistureRead < moistureSetpoint)
       {
         pumpState = 1;
       }
@@ -67,8 +67,8 @@ void loop()
     // Output of the block: print on the serial screen and activate or deactivate the pump
     Serial.println("\n|================================================================================|");
     Serial.println("SOIL MOISTURE CONTROL");
-//    Serial.print("moistureRead < moistureSetpoint: ");
-//    Serial.println((moistureRead < moistureSetpoint));
+    Serial.print("moistureRead < moistureSetpoint: ");
+    Serial.println((moistureRead < moistureSetpoint));
 //    Serial.print("Moisture setpoint: ");
 //    Serial.println(moistureSetpoint);
 //    Serial.print("Moisture read: ");
@@ -87,9 +87,11 @@ void loop()
         Serial.println("OFF");
         digitalWrite(pumpPin, LOW);
       }
-    delay(1000);
+    Serial.print("The pumpPin is set to: ");
+    Serial.println(digitalRead(pumpPin));
+    delay(3000);
     
-    Serial.println("\n~~~~~~~~~~");
+    Serial.println("~~~~~~~~~~");
 
     // LoRa loop - Reception and transmission
     /*
@@ -101,10 +103,11 @@ void loop()
       5. Execute the instructions.
       6. Set the LoRa module in sleep mode until the next iteration.
     */
-    
+
+  /*  
     // 1. Wait for the sync message
-    Serial.println("\nCOMMUNICATION WITH THE MASTER");
-    Serial.println("Waiting for the sync message");
+    Serial.println("COMMUNICATION WITH THE MASTER");
+    Serial.println("Waiting for the sync message...");
     receiveSync();
     delay(4000);
 
@@ -114,7 +117,7 @@ void loop()
     str = loraSerial.readStringUntil('\n');
     
     // 3. Send data to the master and check it is sent correctly
-    Serial.println("Sending data to the master.");
+    Serial.println("Sending data to the master...");
     data_tx = moistureValue;
     loraSerial.print("radio tx ");
     loraSerial.println(data_tx);  // *** PUT HERE THE DATA TO SEND TO THE MASTER ***
@@ -122,18 +125,19 @@ void loop()
     checkTransmission();
 
     // 4. Receive instructions from master block
-    Serial.println("Waiting for instructions from the master.");
+    Serial.println("Waiting for instructions from the master...");
     data_rx = receiveData();
     Serial.print("Data received from the master: ");
     Serial.println(data_rx);
 
     // 5. Execute the instructions
     delay(1000);
-
+*/
     // 6. Set the lora module in sleep mode untile the next iteration
     loraSerial.print("sys sleep ");     // Puts the system to speed for the specified number of ms (SLEEP_TIME)
     loraSerial.println(SLEEP_TIME);
     str = loraSerial.readStringUntil('\n');
+
   }
 
 // ============================================================================================|
@@ -238,24 +242,24 @@ void receiveSync()
           }
         if ( str.indexOf("radio_rx 1") == 0 )          // Receive the response from the master: if 1 all good 
           {
-            Serial.println("Sync message received");
+            Serial.println("└── Sync message received.");
           }
         else
           {
-            Serial.println("Received nothing");
+            Serial.println("└── Sync message not received.");
           }
       }
     else if ( str.indexOf("invalid_param") == 0)
       {
-        Serial.println("Parameter not valid");
+        Serial.println("└── Parameter not valid");
       }
     else if ( str.indexOf("radio_err") == 0)
       {
-        Serial.println("Reception not succesful, reception time out occured");
+        Serial.println("└── Reception not succesful, reception time out occured");
       }
     else
       {
-        Serial.println("Radio not going into receive mode, unknown reason");
+        Serial.println("└── Radio not going into Reception mode without any expected response. Is the transceiver well connected?");
       }
   }
 
@@ -282,16 +286,28 @@ void checkTransmission()
           }
         if (str.indexOf("radio_tx_ok") == 0)  //checking if data was sent correctly
           {
-            Serial.println("Message sent correctly."); //printing received data
+            Serial.println("└── Message sent correctly."); //printing received data
+          }
+        else if (str.indexOf("radio_err") == 0)
+          {
+            Serial.println("└── Transmission interrupted by radio Watchdog Timer time-out.");
           }
         else
           {
-            Serial.println("Transmission failed.");
+            Serial.println("└── Transmission failed unexpectedly.");
           }
+      }
+    else if (str.indexOf("invalid_param") == 0)
+      {
+        Serial.println("└── Parameter not valid.");
+      }
+    else if (str.indexOf("busy") == 0)
+      {
+        Serial.println("└── Transceiver currently busy.");
       }
     else
       {
-        Serial.println("Transmission failed.");
+        Serial.println("└── Transmission failed without any expected response. Is the transceiver well connected?");
       }
   }
 
@@ -310,32 +326,35 @@ void checkTransmission()
 int receiveData()
   {
     int data=0;
-    loraSerial.println("radio rx 0"); //wait for to receive until the watchdogtime
+    loraSerial.println("radio rx 0");               // Set the receiver in Continuous Reception mode
     str = loraSerial.readStringUntil('\n');
     delay(20);
-    if ( str.indexOf("ok") == 0 ) //check if the parameters are correct, and we are in rx mode
-    {
-      str = String("");
-      while(str=="")
+    if ( str.indexOf("ok") == 0 )                   // Parameter is valid and the transceiver is congifured in Receive mode
       {
-        str = loraSerial.readStringUntil('\n');
-      }
-      if ( str.indexOf("radio_rx") == 0 )  //checking if data was received (equals radio_rx = <data>)
-      {
-        Serial.println("data received");
-        int index = str.indexOf(' ');
-        data_str=str.substring(index+1); //keeps only the <data> part of the string
-        data= data_str.toInt(); //trnasforms the string into an int
+        str = String("");
+        while(str=="")
+          {
+            str = loraSerial.readStringUntil('\n');
+          }
+        if ( str.indexOf("radio_rx") == 0 )         // Check if reception was succesful, meaning radio_rx <data>
+          {
+            Serial.println("data received");
+            int space_index = str.indexOf(' ');
+            data_str=str.substring(space_index+1); //keeps only the <data> part of the string
+            data= data_str.toInt(); //trnasforms the string into an int
+          }
+        else if ( str.indexOf("radio_err") == 0 ) 
+          {
+            Serial.println("└── Reception not succesful, reception time-out occurred.");
+          }
+        else
+          {
+            Serial.println("└── Reception not succesful; for unknown reasons.");
+          }
       }
       else
       {
-        Serial.println("Received nothing");
+        Serial.println("└── Reception failed without any expected response. Is the transceiver well connected?");
       }
-    }
-    else
-    {
-      Serial.println("radio not going into receive mode");
-    }
-    return data;
+      return data;
   }
-
