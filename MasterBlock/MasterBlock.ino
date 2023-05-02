@@ -27,6 +27,7 @@ const char* SCOPE_ID = "0ne009E225E";
 const char* DEVICE_ID = "1hihltp023e";
 const char* DEVICE_KEY = "+9VWNWUEuL6C6XeNDI9jkw4+b8S8Fa/vpuSr54qvOp8=";
 
+
 #define WIFI_SSID "Simon - iPhone"
 #define WIFI_PASSWORD "IoT11223344"
 
@@ -50,12 +51,15 @@ const char* DEVICE_KEY = "+9VWNWUEuL6C6XeNDI9jkw4+b8S8Fa/vpuSr54qvOp8=";
 
 SoftwareSerial loraTxSerial(LORAT_PINRX, LORAT_PINTX);
 SoftwareSerial loraRxSerial(LORAR_PINRX, LORAR_PINTX);
-/*I implemented the two lora modules using software serial, as i said this should not be a problem for the p2p communication, but maybe it could be one with the loraWAN
-because the system can listen to only one module at a time, and the listen also apparently cancels the buffers of the messages in the modules
-*/
 
-String str, data_str;
+String str, data_str, temp;
 int data1, data2, data3;
+
+unsigned long start_time;
+unsigned long current_time;
+// The entire cycle from first sync-message to data upload to the cloud is fixed
+// For the sake of this demonstration the cycle restarts every 1 minute
+#define CYCLE_TIME 60000
 
 //When recieved command -> action
 void on_event(IOTContext ctx, IOTCallbackInfo* callbackInfo);
@@ -82,14 +86,19 @@ void loop() {
 */  
 
   //send the syncronization message and check it is sent correctly
+  // This is used to sync the slave-blocks clocks/timings to make sure the Master is ready to recieve data when it attempts a transmission
   loraTxSerial.print("radio set freq ");
   loraTxSerial.println(FREQ_B);
-  str = loraTxSerial.readStringUntil('\n');  
+  str = loraTxSerial.readStringUntil('\n');
 
   Serial.println("sending sync message");
   loraTxSerial.print("radio tx ");
   loraTxSerial.println(sync_msg);
   checkTransmission();
+
+  // Get base time of when sync meassage was sent
+  start_time = millis();
+
   delay(1000);
 
   // --------------- receive data from block 1 - TEMP/HUMIDITY BLOCK (OBS: This was Block 2 in the original sketch)
@@ -107,6 +116,7 @@ void loop() {
 
 
   // --------------- receive data from block 2 - FAN BLOCK (OBS: This was block 1 in the original Sketch)
+  
   //RX switch to freq 2
   Serial.println("RX to FREQ 2");
   loraRxSerial.print("radio set freq ");
@@ -200,6 +210,12 @@ void loop() {
 
   iotc_do_work(context);
  
+ // Sleep untill the cycle started exactly {CYCLE_TIME} ago
+ current_time = millis();
+ if (current_time - start_time < CYCLE_TIME) {
+   delay(current_time - start_time);
+ }
+
 
 };
 
@@ -216,9 +232,15 @@ void wifi_setup () {
   }
 }
 
-void client_reconnect () {
-  Serial.println("setup client-connection");
+void client_reconnect () { // This part is stil flawed... Cannot re-connect
+  //Shutdown context
+  iotc_disconnect(context);
+  //re-establish connection
   connect_client(SCOPE_ID, DEVICE_ID, DEVICE_KEY);
+
+  // Right code would be to use this:
+  // iotc_connect(IOTContext ctx, const char* scope, const char* keyORcert, const char* deviceId, IOTConnectType type);
+  // though unsure what 'IOTConnectType' reffers to?
 
   if (context != NULL) {
     lastTick = 0;
@@ -439,7 +461,7 @@ void setupLoraTx() {
   str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
-  loraTxSerial.println("radio set sync 321"); //set the sync word used
+  loraTxSerial.println("radio set sync 1"); //set the sync word used
   str = loraTxSerial.readStringUntil('\n');
   Serial.println(str);
   
