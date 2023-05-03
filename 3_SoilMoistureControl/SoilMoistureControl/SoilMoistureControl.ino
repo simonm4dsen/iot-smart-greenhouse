@@ -127,7 +127,7 @@ void loop()
     // 4. Receive instructions from master block
     Serial.println("Waiting for instructions from the master...");
     data_rx = receiveData(loraSerial);
-    Serial.print("Data received from the master: ");
+    Serial.print("Data received from the master: ");  
     Serial.println(data_rx);
 
     // 5. Execute the instructions
