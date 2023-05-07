@@ -11,8 +11,8 @@
 DHT dht(DHTPIN, DHTTYPE);
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
 
-void setup() {
-  Serial.begin(9600);
+void setup() {             // Setup
+  Serial.begin(9600);     // Serial Communication
   while (!Serial) delay(10);
   pinMode(LED, OUTPUT);
   digitalWrite(LED, HIGH);
@@ -36,7 +36,7 @@ void loop() {
     Serial.println("Failed to read from DHT sensor!");
     return;
   }
-  Serial.print("Humidity: ");
+  Serial.print("Humidity: "); // Printing the sensor values
   Serial.print(humidity);
   Serial.print("%  Temperature: ");
   Serial.print(temperature);
