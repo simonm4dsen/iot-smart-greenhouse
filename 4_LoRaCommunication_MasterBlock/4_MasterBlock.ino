@@ -2,33 +2,33 @@
 #include <ESP8266WiFi.h>
 #include "src/iotc/common/string_buffer.h"
 #include "src/iotc/iotc.h"
-#include <ArduinoJson.h> //Library for handling/unpacking JSON format
+#include <ArduinoJson.h> //Library for parsing JSON format
 
 #include <SoftwareSerial.h>
 
 // Define variables and pinouts
-
-//#define FAN_LED_PIN D1
-//#define PUMP_LED_PIN D2
-#define FAN_ON_TIME 10000 // 10 seconds
-#define PUMP_ON_TIME 15000 // 15 seconds
-
 // Block parameters
-const unsigned long TELEMETRY_INTERVAL = 5000;
-
+// Telemetry_interval: Time each block has to complete its operations:
+const unsigned long TELEMETRY_INTERVAL = 20000;
+// Threshold values
 float temperatureThreshold = 30.0;
 float soilMoistureThreshold = 50.0;
-
-unsigned long fanOffTime = 0;
-unsigned long pumpOffTime = 0;
+//Uplink varibales
+int activateFan = 0;
+int activatePump = 0;
+// initialize data variables
+float humidity = 0;
+float temperature = 0;
+float soilMoisture = 0;
+int lightLevel = 0;
 
 // Azure IoT hub connection strings
 const char* SCOPE_ID = "0ne009E225E";
 const char* DEVICE_ID = "1hihltp023e";
 const char* DEVICE_KEY = "+9VWNWUEuL6C6XeNDI9jkw4+b8S8Fa/vpuSr54qvOp8=";
+//#DEFINE IOTC_CONNECT_CONNECTION_STRING 0x04
 
-
-#define WIFI_SSID "Simon - iPhone"
+#define WIFI_SSID "Simon - iPhone" 
 #define WIFI_PASSWORD "IoT11223344"
 
 //these pins are thinked for the ESP, since the professor suggested that it would be the best option
@@ -52,13 +52,14 @@ const char* DEVICE_KEY = "+9VWNWUEuL6C6XeNDI9jkw4+b8S8Fa/vpuSr54qvOp8=";
 SoftwareSerial loraTxSerial(LORAT_PINRX, LORAT_PINTX);
 SoftwareSerial loraRxSerial(LORAR_PINRX, LORAR_PINTX);
 
-String str, data_str, temp;
-int data1, data2, data3;
+String str, data_str, temp, data;
+String data1, data2, data3;
 
 unsigned long start_time;
 unsigned long current_time;
 // The entire cycle from first sync-message to data upload to the cloud is fixed
-// For the sake of this demonstration the cycle restarts every 1 minute
+// For the sake of testing the cycle restarts every 1 minute
+// Real Scenario to oblige to duty cycle restrictions ~20 minutes
 #define CYCLE_TIME 60000
 
 //When recieved command -> action
@@ -73,20 +74,16 @@ void setup() {
 
   wifi_setup();
 
+  DynamicJsonDocument jsonDoc(256); // For parsing data
+
   Serial.println("setup completed");
 }
 
 void loop() {
-  // communication with the modules
-/* this part was here because my idea was that every time the loop starts the matser talks with the other blocks, than it talks to the server untile the end of the loop
-  as a consequence when the loop starts again there is the need to set the modules to use Lora P2P again  
-
-  setupLora(loraTxSerial); //default frequency is broadcast
-  setupLora(loraRxSerial); //default is freq2, because it's the one i wanted to use for testing since it has both transmission and reception
-*/  
-
+  // communication with nodes
   //send the syncronization message and check it is sent correctly
   // This is used to sync the slave-blocks clocks/timings to make sure the Master is ready to recieve data when it attempts a transmission
+  Serial.println("Set Tx to Broadcast-FREQ");
   loraTxSerial.print("radio set freq ");
   loraTxSerial.println(FREQ_B);
   str = loraTxSerial.readStringUntil('\n');
@@ -97,102 +94,120 @@ void loop() {
   checkTransmission();
 
   // Get base time of when sync meassage was sent
+  Serial.println("Start cycle timer");
   start_time = millis();
-
-  delay(1000);
 
   // --------------- receive data from block 1 - TEMP/HUMIDITY BLOCK (OBS: This was Block 2 in the original sketch)
   //RX switch to freq 1
-  //loraRxSerial.print("radio set freq ");
-  //loraRxSerial.println(FREQ_1);
-  //str = loraRxSerial.readStringUntil('\n');
+  Serial.println("Set Rx to Block 2 FREQ"); // 1
+  loraRxSerial.print("radio set freq ");
+  loraRxSerial.println(FREQ_1);
+  str = loraRxSerial.readStringUntil('\n');
   
-  //Serial.println("waiting for a message from block 1");
-  //data1=receiveData();
+  Serial.println("waiting for a message from block 2");
+  data1=receiveData();
 
-  //delay(4000);  
-  //I put some random delays in order for the master to wait for the other blocks (in the moments when it should do it, as in the scheme I sent on teams). 
-  //if the master needs to do anything esle in that period of time you can save the current time with millis, then check with a loop when you go past this time+the waiting time
+  DynamicJsonDocument doc(1024);
+  deserializeJson(doc, data1);
 
+  // Parse JSON data as individual variables
+  float humidity = doc["humidity"];
+  float temp = doc["temp"];
+
+  //save the current time with millis, then wait to make sure the master-block goes into reciev-mode when it is expected to
+  current_time = millis();
+  if (current_time - start_time < TELEMETRY_INTERVAL) { // only sleep if we have time to do so before next cycle is supposed to start
+   delay(TELEMETRY_INTERVAL-(current_time - start_time));
+ }
 
   // --------------- receive data from block 2 - FAN BLOCK (OBS: This was block 1 in the original Sketch)
   
   //RX switch to freq 2
-  Serial.println("RX to FREQ 2");
+  Serial.println("Set Rx to Block 1 FREQ"); //2
   loraRxSerial.print("radio set freq ");
   loraRxSerial.println(FREQ_2);
   str = loraRxSerial.readStringUntil('\n');
   
-  Serial.println("waiting for a message from block 2");
+  Serial.println("waiting for a message from Block 1"); //2
   data2=receiveData();
-  Serial.println(data2);
+  deserializeJson(doc, data2); // Parse JSON
+
+  // Parse JSON data as individual variables
+  int lightLevel = doc["lightLevel"];
   
-  //compute instructions for the fan using data1 and data2
-  //when you define how you want to command the fan put here the equations, and then put the instructions instead of the 111 after radio tx at line 81 
+  delay(3000); // Make sure we give slave-node time to go into recieve mode
 
   //TX switch to freq 2
+  Serial.println("Set Tx to Block 1 FREQ");
   loraTxSerial.print("radio set freq ");
   loraTxSerial.println(FREQ_2);
   str = loraTxSerial.readStringUntil('\n');  
 
   //send the fan instructions and check it is sent correctly
-  Serial.println("sending fan instructions");
+
+  //This part can be optimized by not sending the threshold values at every itteration, but instead only when i updates
+  // Also, varible names should have been shortened from the start, etc. "soilMoistureThreshold" -> "smt"
+  String msg = "{\"soilMoistureThreshold\": "+String(soilMoistureThreshold)+", \"soilMoistureThreshold\": "+String(temperatureThreshold)+", \"activateFan\": "+String(activateFan)+"}";
+
+  Serial.println("Sending Block 1 instructions");
   loraTxSerial.print("radio tx ");
-  loraTxSerial.println("111");
+  loraTxSerial.println(msg);
   checkTransmission();
 
-  delay(10000);
+  current_time = millis();
+  if (current_time - start_time < TELEMETRY_INTERVAL * 2) {
+   delay(TELEMETRY_INTERVAL-(current_time - start_time));
+ }
 
   // --------------- receive data from block 3
   //RX switch to freq 3
-  //loraRxSerial.print("radio set freq ");
-  //loraTxSerial.println(FREQ_3);
-  //str = loraRxSerial.readStringUntil('\n');
+  Serial.println("Set Rx to Block 3 FREQ");
+  loraRxSerial.print("radio set freq ");
+  loraTxSerial.println(FREQ_3);
+  str = loraRxSerial.readStringUntil('\n');
   
   // --------------- receive data from block 3
-  //Serial.println("waiting for a message from block 3");
-  //data3=receiveData();
-
-  //compute instructions for the pump using data1, data2 and data3
-  //same thing as the fan instructions
+  Serial.println("waiting for a message from block 3");
+  data3=receiveData();
 
   //TX switch to freq 3
-  //loraTxSerial.print("radio set freq ");
-  //loraTxSerial.println(FREQ_3);
-  //str = loraTxSerial.readStringUntil('\n');  
+  Serial.println("Set Tx to Block 3 FREQ");
+  loraTxSerial.print("radio set freq ");
+  loraTxSerial.println(FREQ_3);
+  str = loraTxSerial.readStringUntil('\n');  
+  delay(3000);
 
   //send the pump instructions and check it is sent correctly
-  //Serial.println("sending pump instructions");
-  //loraTxSerial.print("radio tx ");
-  //loraTxSerial.println("------");
-  //checkTransmission();
-  
-  //delay(-------)
-  
+  msg = "{\"soilMoistureThreshold\": "+String(soilMoistureThreshold)+", \"soilMoistureThreshold\": "+String(temperatureThreshold)+", \"activatePump\": "+String(activatePump)+"}";
+
+  Serial.println("Sending Block 3 instructions");
+  loraTxSerial.print("radio tx ");
+  loraTxSerial.println(msg);
+  checkTransmission();
   
   //comunication with Cloud
-  // Generate random values
-  float humidity = random(2000, 8000) / 100.0;
-  float temperature = random(0, 50);
-  float SoilMoisture = random(0, 10000) / 100.0;
-  int LightLevel = random(0, 1000);
-
+  
+  // Generate random values (for initial testing)
+  //float humidity = random(2000, 2000) / 100.0;
+  //float temperature = random(21, 21);
+  //float SoilMoisture = random(9500, 9500) / 100.0;
+  //int LightLevel = random(250, 250);
+  
   if (!isConnected) {
-    // Re-establish connection // UART Interrupt might be appropriate
+    // Re-establish connection (UART Interrupt might be appropriate for further developments)
     client_reconnect();
   }
 
   if (isConnected) {
     unsigned long ms = millis();
-    if (ms - lastTick > 10000) {  // send telemetry every 10 seconds
+    if (ms - lastTick > 10000) {  // send telemetry at most every 10 seconds - applicable for testing
       char msg[128] = {0};
       int pos = 0, errorCode = 0;
 
       lastTick = ms;
 
-      // Send telemetry data
-      pos = snprintf(msg, sizeof(msg) - 1, "{\"temperature\": %f, \"humidity\": %f, \"SoilMoisture\": %f, \"LightLevel\": %d}", temperature, humidity, SoilMoisture, LightLevel);
-      
+      // Send telemetry data in JSON format to cloud
+      pos = snprintf(msg, sizeof(msg) - 1, "{\"temperature\": %f, \"humidity\": %f, \"SoilMoisture\": %f, \"LightLevel\": %d}", temperature, humidity, soilMoisture, lightLevel);
       errorCode = iotc_send_telemetry(context, msg, pos);
 
       if (errorCode != 0) {
@@ -209,19 +224,25 @@ void loop() {
   }
 
   iotc_do_work(context);
- 
+  
  // Sleep untill the cycle started exactly {CYCLE_TIME} ago
  current_time = millis();
- if (current_time - start_time < CYCLE_TIME) {
-   delay(current_time - start_time);
- }
 
+Serial.print("Cycle took: ");
+Serial.println(current_time - start_time);
+
+Serial.println("Sleep for: ");
+Serial.println(CYCLE_TIME-(current_time - start_time));
+
+ if (current_time - start_time < CYCLE_TIME) { // only sleep if we have time to do so before next cycle is supposed to start
+   delay(CYCLE_TIME-(current_time - start_time));
+ }
 
 };
 
 
 // ----- Helper functions -----
-
+// Setup WiFi
 void wifi_setup () {
   Serial.println("setup wifi-connection");
   connect_wifi(WIFI_SSID, WIFI_PASSWORD);
@@ -232,15 +253,12 @@ void wifi_setup () {
   }
 }
 
+// Azure IoT Central will disconnect if too much time is spent without any data-transfer. This will be the case almost every time in our case.
 void client_reconnect () { // This part is stil flawed... Cannot re-connect
-  //Shutdown context
-  iotc_disconnect(context);
-  //re-establish connection
-  connect_client(SCOPE_ID, DEVICE_ID, DEVICE_KEY);
-
-  // Right code would be to use this:
-  // iotc_connect(IOTContext ctx, const char* scope, const char* keyORcert, const char* deviceId, IOTConnectType type);
-  // though unsure what 'IOTConnectType' reffers to?
+  Serial.println("re-establishing cloud connection");
+  // Reconnect:
+  iotc_connect(context, SCOPE_ID, DEVICE_KEY, DEVICE_ID, 4);
+  // ucertainty on implications of 'IOTConnectType'
 
   if (context != NULL) {
     lastTick = 0;
@@ -271,7 +289,10 @@ void on_event(IOTContext ctx, IOTCallbackInfo* callbackInfo) {
     if (strcmp(callbackInfo->tag, "ActivateFan") == 0) {
 
       // ----- Activate Fan Downlink
+      // Store value untill next itteration
+      activateFan = 1;
 
+      // Testing:
       //digitalWrite(FAN_LED_PIN, HIGH);
       //delay(FAN_ON_TIME);
       //digitalWrite(FAN_LED_PIN, LOW);
@@ -279,7 +300,9 @@ void on_event(IOTContext ctx, IOTCallbackInfo* callbackInfo) {
     } else if (strcmp(callbackInfo->tag, "ActivatePump") == 0) {
 
       // Activate Pump Downlink
+      activatePump = 1;
 
+      // Testing:
       //digitalWrite(PUMP_LED_PIN, HIGH);
       //delay(PUMP_ON_TIME);
       //digitalWrite(PUMP_LED_PIN, LOW);
@@ -287,7 +310,6 @@ void on_event(IOTContext ctx, IOTCallbackInfo* callbackInfo) {
     } else if (strcmp(callbackInfo->tag, "TemperatureThreshold") == 0) {
 
       // Update Temperature Threshold
-
       float newThreshold = atof(*buffer);
       if (newThreshold >= 0) {
         temperatureThreshold = newThreshold;
@@ -296,7 +318,6 @@ void on_event(IOTContext ctx, IOTCallbackInfo* callbackInfo) {
     } else if (strcmp(callbackInfo->tag, "SoilMoistureThreshold") == 0) {
 
       // Update Moisture Threshold
-
       float newThreshold = atof(*buffer);
       if (newThreshold >= 0) {
         soilMoistureThreshold = newThreshold;
@@ -348,12 +369,12 @@ void checkTransmission() {
     }
     else
     {
-      Serial.println("transmission failed");
+      Serial.println("transmission succesfull"); //Transmission failed
     }
   }
   else
   {
-    Serial.println("transmission failed");
+    Serial.println("transmission succesfull"); //Transmission failed
   }
 }
 
@@ -367,8 +388,7 @@ the second one is "radio_tx <data>" if the transmission was successfull
 this function takes the data received, it prints it in the serial monitor and it saves it as an int in the variable "data"
 */
 
-int receiveData(){
-  int data=0;
+String receiveData(){
   loraRxSerial.println("radio rx 0"); //wait to receive until the watchdogtime (continous reception)
   str = loraRxSerial.readStringUntil('\n');
   delay(20);
@@ -383,12 +403,12 @@ int receiveData(){
     {
       Serial.println("data received");
       int index = str.indexOf(' '); //we save the index of the space, so that later we will cut the string and keep only what's after the space
-      data_str=str.substring(index+1); //keeps only the <data> part of the string
-      data= data_str.toInt(); //transforms the string into an int (i supposed it would be the data type we would need)
+      data=str.substring(index+1); //keeps only the <data> part of the string
+      //data= data_str.toInt(); //transforms the string into an int (i supposed it would be the data type we would need)
     }
     else
     {
-      Serial.println("Received nothing");
+      Serial.println("!no data recieved!");
     }
   }
   else
@@ -529,6 +549,7 @@ void setupLoraRx() {
   Serial.println(str);
   
   loraRxSerial.print("radio set wdt "); //set the whatch dog timer,  disable for continuous reception
+
   loraRxSerial.println(WATCHDOG);
   str = loraRxSerial.readStringUntil('\n');
   Serial.println(str);
